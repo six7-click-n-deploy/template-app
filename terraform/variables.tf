@@ -1,41 +1,46 @@
 variable "instance_name" {
-  description = "Name of the instance"
   type        = string
-  default     = "deploy-o-matic"
+  default     = "my-app"
+  description = "Name of the instance"
 }
 
 variable "image_name" {
-  description = "Name of the image to use (Packer-built with nginx + app page)"
-  type        = string
-  default     = "deploy-o-matic-image"
+  type    = string
+  default = "template-image"
 }
 
 variable "flavor" {
-  description = "Flavor (instance type) to use"
   type        = string
   default     = "gp1.small"
+  description = "OpenStack flavor"
 }
 
 variable "key_pair" {
-  description = "SSH key pair name"
   type        = string
   default     = ""
+  description = "OpenStack keypair name (required for SSH)"
 }
 
 variable "network_uuid" {
-  description = "UUID of the internal network to attach the instance to"
   type        = string
-  default     = "34a00b87-57ce-42c4-8e1b-9ea8a657ec2e"
-}
-
-variable "environment" {
-  description = "Environment tag"
-  type        = string
-  default     = "development"
+  default     = "4971e080-966d-485e-a161-3e2b7fefad53"
+  description = "Internal network UUID for the VM"
 }
 
 variable "floating_ip_pool" {
-  description = "Name of the floating IP pool (external network)"
   type        = string
   default     = "DHBW"
+  description = "External network name/pool used for Floating IPs"
+}
+
+variable "environment" {
+  type        = string
+  default     = "dev"
+  description = "Environment tag"
+}
+
+variable "ssh_cidr" {
+  type        = string
+  default     = "0.0.0.0/0"
+  description = "CIDR allowed to SSH (set to your.ip/32 for safety)"
 }

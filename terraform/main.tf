@@ -14,21 +14,28 @@ terraform {
 }
 
 provider "openstack" {
-  # Credentials come from OS_* environment variables / clouds.yaml
+  # Auth via OS_CLOUD + clouds.yaml
 }
 
+# --- Image (Packer-built) ---
 data "openstack_images_image_v2" "app_image" {
   name        = var.image_name
   most_recent = true
+}
+
+# --- External network (Floating IP pool) ---
+data "openstack_networking_network_v2" "external" {
+  name = var.floating_ip_pool
 }
 
 resource "random_id" "suffix" {
   byte_length = 4
 }
 
+# --- Security Group (KEEP THIS) ---
 resource "openstack_networking_secgroup_v2" "app_sg" {
   name        = "${var.instance_name}-sg-${random_id.suffix.hex}"
-  description = "Security group for Deploy-O-Matic web app"
+  description = "Security group for the app VM"
 }
 
 resource "openstack_networking_secgroup_rule_v2" "ssh" {
@@ -37,7 +44,7 @@ resource "openstack_networking_secgroup_rule_v2" "ssh" {
   protocol          = "tcp"
   port_range_min    = 22
   port_range_max    = 22
-  remote_ip_prefix  = "0.0.0.0/0"
+  remote_ip_prefix  = var.ssh_cidr
   security_group_id = openstack_networking_secgroup_v2.app_sg.id
 }
 
@@ -69,13 +76,10 @@ resource "openstack_networking_secgroup_rule_v2" "icmp" {
   security_group_id = openstack_networking_secgroup_v2.app_sg.id
 }
 
-data "openstack_networking_network_v2" "external" {
-  name = var.floating_ip_pool
-}
-
+# --- VM ---
 resource "openstack_compute_instance_v2" "app" {
   name        = var.instance_name
-  image_name  = data.openstack_images_image_v2.app_image.name
+  image_id    = data.openstack_images_image_v2.app_image.id
   flavor_name = var.flavor
   key_pair    = var.key_pair
 
@@ -86,19 +90,19 @@ resource "openstack_compute_instance_v2" "app" {
   }
 
   metadata = {
-    deployed_by = "click-n-deploy-worker"
-    app         = "deploy-o-matic"
+    deployed_by = "template"
+    app         = var.instance_name
     environment = var.environment
   }
 }
 
+# --- Floating IP ---
 resource "openstack_networking_floatingip_v2" "app_fip" {
   pool = data.openstack_networking_network_v2.external.name
 }
 
-resource "openstack_compute_floatingip_associate_v2" "app_fip_assoc" {
+# Use Neutron association (recommended; avoids deprecated compute assoc)
+resource "openstack_networking_floatingip_associate_v2" "app_fip_assoc" {
   floating_ip = openstack_networking_floatingip_v2.app_fip.address
-  instance_id = openstack_compute_instance_v2.app.id
-
-  depends_on = [openstack_compute_instance_v2.app]
+  port_id     = openstack_compute_instance_v2.app.network[0].port
 }
