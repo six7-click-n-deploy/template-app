@@ -1,52 +1,59 @@
-# template-app — OpenStack + Packer (Image-Build) + Terraform (Infra-Deployment)
-# Ziel: reproduzierbare Images, Trennung Image/Infra, Startpunkt für eigene Apps
+# template-app: OpenStack + Packer (Image-Build) + Terraform (Infra-Deployment)
 
-set -euo pipefail
+## Ziel
+Eine Lösung für reproduzierbare Images, saubere Trennung von Images und Infrastruktur, sowie ein solider Startpunkt für eigene Anwendungen.
 
-# ------------------------------------------------------------------------------
-# Ordnerstruktur
-# ------------------------------------------------------------------------------
-cat <<'TXT'
+---
+
+## Ordnerstruktur
+
+```plaintext
 template-app/
 ├── packer/
-│   ├── template.pkr.hcl        # Packer Template
+│   ├── template.pkr.hcl   # Packer Template
 │   └── scripts/
-│       └── provision.sh        # Provisioning (läuft beim Image-Build)
+│       └── provision.sh   # Provisioning (läuft beim Image-Build)
 │
 ├── terraform/
-│   ├── main.tf                 # OpenStack Ressourcen
-│   ├── variables.tf            # Terraform Variablen
-│   ├── outputs.tf              # Outputs (z. B. Floating IP)
-│   ├── terraform.tfvars        # Eigene Werte (lokal, nicht committen)
+│   ├── main.tf            # OpenStack Ressourcen
+│   ├── variables.tf       # Terraform Variablen
+│   ├── outputs.tf         # Outputs (z. B. Floating IP)
+│   ├── terraform.tfvars   # Eigene Werte (lokal, nicht committen)
 │   └── .terraform/
 │
-├── .gitignore
+└── .gitignore
 └── README.md
-TXT
+```
 
-# ------------------------------------------------------------------------------
-# Voraussetzungen (lokal)
-# ------------------------------------------------------------------------------
-cat <<'TXT'
-Voraussetzungen:
-- Packer >= 1.9
-- Terraform >= 1.5
-- (optional, empfohlen) OpenStack CLI
+---
 
-macOS (Homebrew):
-  brew install packer terraform openstackclient
-TXT
+## Voraussetzungen (lokal)
 
-# ------------------------------------------------------------------------------
-# OpenStack Login – clouds.yaml (NICHT committen)
-# ------------------------------------------------------------------------------
-cat <<'TXT'
-Authentifizierung via clouds.yaml (lokal, nicht committen)
+**Software-Abhängigkeiten:**
+- **Packer**: Version >= 1.9
+- **Terraform**: Version >= 1.5
+- **OpenStack CLI** (optional, empfohlen)
 
+**Für macOS (Homebrew):**
+
+```bash
+brew install packer terraform openstackclient
+```
+
+---
+
+## OpenStack Login – `clouds.yaml` (nicht committen)
+
+**Authentifizierungsdatei `clouds.yaml` (lokal):**
 Standardpfad:
-  ~/.config/openstack/clouds.yaml
 
-Beispiel (anpassen):
+```plaintext
+~/.config/openstack/clouds.yaml
+```
+
+Beispielkonfiguration:
+
+```yaml
 clouds:
   openstack:
     auth:
@@ -59,112 +66,127 @@ clouds:
     region_name: "<REGION_NAME>"
     interface: "<INTERFACE>"
     identity_api_version: <IDENTITY_API_VERSION>
+```
 
 Rechte setzen:
-  chmod 600 ~/.config/openstack/clouds.yaml
 
-Test:
-  export OS_CLOUD=openstack
-  openstack token issue
-TXT
+```bash
+chmod 600 ~/.config/openstack/clouds.yaml
+```
 
-# ------------------------------------------------------------------------------
-# Packer – Image bauen
-# ------------------------------------------------------------------------------
-cat <<'TXT'
-Packer – Image bauen:
-  cd packer
-  packer init .
-  # optional:
-  # packer init -upgrade .
-  packer validate .
-  export OS_CLOUD=openstack
-  packer build .
+Teste die Authentifizierung:
 
-Ergebnis:
+```bash
+export OS_CLOUD=openstack
+openstack token issue
+```
+
+---
+
+## Packer – Image erstellen
+
+Gehe in das Packer-Verzeichnis und führe die Befehle aus:
+
+```bash
+cd packer
+packer init .
+# Optional: packer init -upgrade .
+packer validate .
+export OS_CLOUD=openstack
+packer build .
+```
+
+**Ergebnis:**
 - Neues Image in OpenStack Glance
-- Image-Name steht im Output und wird später in Terraform referenziert
-TXT
+- Image-Name wird als Output angezeigt und später in Terraform verwendet
 
-# ------------------------------------------------------------------------------
-# Provisioning – packer/scripts/provision.sh
-# ------------------------------------------------------------------------------
-cat <<'TXT'
-Provisioning – packer/scripts/provision.sh:
-Hier definierst man, was im Image enthalten ist:
+---
+
+## Provisioning – `packer/scripts/provision.sh`
+
+**Provisioning-Skript:**
+Definiere, was im Image enthalten sein soll:
 - Pakete installieren
 - Services konfigurieren
 - Webserver / App
 - Ports festlegen
 
-Änderungen hier erfordern immer einen neuen Image-Build:
-  packer build .
-TXT
+**Änderungen** hier erfordern immer einen neuen Image-Build:
 
-# ------------------------------------------------------------------------------
-# Terraform – Deployment
-# ------------------------------------------------------------------------------
-cat <<'TXT'
-Terraform – Deployment:
-  cd terraform
-  # terraform.tfvars lokal anlegen/anpassen (nicht committen)
-  terraform init
-  terraform plan
-  terraform apply
+```bash
+packer build .
+```
 
-Nach dem Apply:
-- z. B. Floating IP als Output
+---
+
+## Terraform – Deployment
+
+Im `terraform`-Verzeichnis:
+
+```bash
+cd terraform
+# terraform.tfvars lokal anlegen/anpassen (nicht committen)
+terraform init
+terraform plan
+terraform apply
+```
+
+**Nach dem Terraform Apply:**
+- Floating IP als Output
 - App ist über den Browser erreichbar
-TXT
 
-# ------------------------------------------------------------------------------
-# Was erfordert was?
-# ------------------------------------------------------------------------------
-cat <<'TXT'
-Was erfordert was?
+---
 
-Änderung                Aktion
-----------------------  ----------------
-provision.sh            packer build .
-Packer Template         packer build .
-Terraform Dateien       terraform apply
-App-Code im Image       packer build .
-TXT
+## Was erfordert welche Aktion?
 
-# ------------------------------------------------------------------------------
-# Aufräumen
-# ------------------------------------------------------------------------------
-cat <<'TXT'
-Aufräumen:
-Infrastruktur löschen:
-  terraform destroy
+| Änderung           | Aktion         |
+|--------------------|------------------|
+| `provision.sh`    | `packer build .` |
+| Packer Template   | `packer build .` |
+| Terraform Dateien | `terraform apply` |
+| App-Code im Image | `packer build .` |
 
-Image löschen:
-  openstack image list
-  openstack image delete <IMAGE_ID>
-TXT
+---
 
-# ------------------------------------------------------------------------------
-# Typischer Workflow
-# ------------------------------------------------------------------------------
-cat <<'TXT'
-Typischer Workflow:
-  cd packer
-  packer init .
-  packer build .
+## Aufräumen
 
-  cd ../terraform
-  terraform init
-  terraform apply
-TXT
+**Infrastruktur entfernen:**
 
-# ------------------------------------------------------------------------------
-# Hinweise
-# ------------------------------------------------------------------------------
-cat <<'TXT'
-Hinweise:
-- clouds.yaml niemals committen
-- terraform.tfvars ist lokal/projektspezifisch
+```bash
+terraform destroy
+```
+
+**Image entfernen:**
+
+```bash
+openstack image list
+openstack image delete <IMAGE_ID>
+```
+
+---
+
+## Typischer Workflow
+
+1. Packer nutzen:
+
+```bash
+cd packer
+packer init .
+packer build .
+```
+
+2. Terraform-Deployment:
+
+```bash
+cd ../terraform
+terraform init
+terraform apply
+```
+
+---
+
+## Hinweise
+- `clouds.yaml` niemals committen
+- `terraform.tfvars` ist lokal/projektspezifisch
 - Security Groups müssen den App-Port erlauben
 - Packer hat keinen State, Terraform schon
-TXT
