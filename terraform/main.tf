@@ -14,6 +14,7 @@ terraform {
 }
 
 provider "openstack" {
+  cloud = "openstack"
   # Auth via OS_CLOUD + clouds.yaml
 }
 
