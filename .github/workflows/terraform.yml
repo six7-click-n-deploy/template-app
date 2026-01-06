@@ -44,6 +44,8 @@
 
 name: 'Terraform'
 
+# Only by pull requests or creating new releases on the main branch
+
 on:
   push:
   pull_request:
