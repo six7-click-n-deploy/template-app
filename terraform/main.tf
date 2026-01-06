@@ -15,28 +15,34 @@ terraform {
 
 provider "openstack" {
   cloud = "openstack"
-  # Auth via OS_CLOUD + clouds.yaml
+  # Auth via OS_CLOUD + clouds.yaml (oder OS_* env vars)
 }
 
-# --- Image (Packer-built) ---
-data "openstack_images_image_v2" "app_image" {
+# Packer-built image lookup by name (keine IDs hardcoden)
+data "openstack_images_image_v2" "image" {
   name        = var.image_name
   most_recent = true
 }
 
-# --- External network (Floating IP pool) ---
+# External network nur nötig, wenn Floating IP aktiviert ist
 data "openstack_networking_network_v2" "external" {
-  name = var.floating_ip_pool
+  count = var.enable_floating_ip ? 1 : 0
+  name  = var.floating_ip_pool
 }
 
 resource "random_id" "suffix" {
   byte_length = 4
 }
 
-# --- Security Group (KEEP THIS) ---
+# -----------------------------------------------------------------------------
+# Security Group: templatefähig über Variablen
+# - SSH auf ssh_cidr
+# - Weitere TCP Ports über allowed_tcp_ports
+# - ICMP optional
+# -----------------------------------------------------------------------------
 resource "openstack_networking_secgroup_v2" "app_sg" {
   name        = "${var.instance_name}-sg-${random_id.suffix.hex}"
-  description = "Security group for the app VM"
+  description = "Security group for the instance"
 }
 
 resource "openstack_networking_secgroup_rule_v2" "ssh" {
@@ -49,27 +55,19 @@ resource "openstack_networking_secgroup_rule_v2" "ssh" {
   security_group_id = openstack_networking_secgroup_v2.app_sg.id
 }
 
-resource "openstack_networking_secgroup_rule_v2" "http" {
+resource "openstack_networking_secgroup_rule_v2" "tcp" {
+  for_each          = toset(var.allowed_tcp_ports)
   direction         = "ingress"
   ethertype         = "IPv4"
   protocol          = "tcp"
-  port_range_min    = 80
-  port_range_max    = 80
-  remote_ip_prefix  = "0.0.0.0/0"
-  security_group_id = openstack_networking_secgroup_v2.app_sg.id
-}
-
-resource "openstack_networking_secgroup_rule_v2" "https" {
-  direction         = "ingress"
-  ethertype         = "IPv4"
-  protocol          = "tcp"
-  port_range_min    = 443
-  port_range_max    = 443
+  port_range_min    = each.value
+  port_range_max    = each.value
   remote_ip_prefix  = "0.0.0.0/0"
   security_group_id = openstack_networking_secgroup_v2.app_sg.id
 }
 
 resource "openstack_networking_secgroup_rule_v2" "icmp" {
+  count             = var.allow_icmp ? 1 : 0
   direction         = "ingress"
   ethertype         = "IPv4"
   protocol          = "icmp"
@@ -77,10 +75,12 @@ resource "openstack_networking_secgroup_rule_v2" "icmp" {
   security_group_id = openstack_networking_secgroup_v2.app_sg.id
 }
 
-# --- VM ---
+# -----------------------------------------------------------------------------
+# Instance
+# -----------------------------------------------------------------------------
 resource "openstack_compute_instance_v2" "app" {
   name        = var.instance_name
-  image_id    = data.openstack_images_image_v2.app_image.id
+  image_id    = data.openstack_images_image_v2.image.id
   flavor_name = var.flavor
   key_pair    = var.key_pair
 
@@ -90,20 +90,19 @@ resource "openstack_compute_instance_v2" "app" {
     uuid = var.network_uuid
   }
 
-  metadata = {
-    deployed_by = "template"
-    app         = var.instance_name
-    environment = var.environment
-  }
+  metadata = var.metadata
 }
 
-# --- Floating IP ---
-resource "openstack_networking_floatingip_v2" "app_fip" {
-  pool = data.openstack_networking_network_v2.external.name
+# -----------------------------------------------------------------------------
+# Optional Floating IP (Neutron association)
+# -----------------------------------------------------------------------------
+resource "openstack_networking_floatingip_v2" "fip" {
+  count = var.enable_floating_ip ? 1 : 0
+  pool  = data.openstack_networking_network_v2.external[0].name
 }
 
-# Use Neutron association (recommended; avoids deprecated compute assoc)
-resource "openstack_networking_floatingip_associate_v2" "app_fip_assoc" {
-  floating_ip = openstack_networking_floatingip_v2.app_fip.address
+resource "openstack_networking_floatingip_associate_v2" "fip_assoc" {
+  count       = var.enable_floating_ip ? 1 : 0
+  floating_ip = openstack_networking_floatingip_v2.fip[0].address
   port_id     = openstack_compute_instance_v2.app.network[0].port
 }
