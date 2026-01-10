@@ -9,7 +9,3 @@ output "fixed_ipv4" {
 output "floating_ip" {
   value = var.enable_floating_ip ? openstack_networking_floatingip_v2.fip[0].address : null
 }
-
-output "access_host" {
-  value = var.enable_floating_ip ? openstack_networking_floatingip_v2.fip[0].address : openstack_compute_instance_v2.app.network[0].fixed_ip_v4
-}

@@ -1,60 +1,79 @@
+############################
+# Frontend-Variablen
+############################
+
+variable "vm_count" {
+  type        = number
+  default     = 1
+  description = "Anzahl der VMs, die erstellt werden sollen"
+}
+
 variable "instance_name" {
   type        = string
-  description = "Name of the instance"
+  description = "Basis-Name der Instanz(en), z.B. 'webserver'"
+  default     = "myapp2"
 }
 
 variable "image_name" {
   type        = string
-  description = "Name of the Packer-built image to deploy"
+  description = "Name des Packer-Images, das deployed werden soll"
+  default     = "myapp2-v1"
 }
 
 variable "flavor" {
   type        = string
-  description = "OpenStack flavor"
-}
-
-variable "key_pair" {
-  type        = string
-  description = "OpenStack keypair name (required for SSH)"
-}
-
-variable "network_uuid" {
-  type        = string
-  description = "Internal network UUID for the VM"
+  description = "OpenStack Flavor (CPU/RAM/Disk-Größe)"
+  default     = "gp1.small"
 }
 
 variable "enable_floating_ip" {
   type        = bool
   default     = true
-  description = "Whether to allocate + associate a floating IP"
-}
-
-variable "floating_ip_pool" {
-  type        = string
-  default     = ""
-  description = "External network/pool name used for floating IPs (required if enable_floating_ip=true)"
-}
-
-variable "ssh_cidr" {
-  type        = string
-  default     = "0.0.0.0/0"
-  description = "CIDR allowed to SSH (recommend: your.ip/32)"
+  description = "Für jede VM eine Floating IP anlegen und assoziieren"
 }
 
 variable "allowed_tcp_ports" {
   type        = list(number)
   default     = []
-  description = "Public TCP ports to allow (e.g. [80, 443]). Empty means: only SSH (plus optional ICMP)."
+  description = "Zusätzliche öffentliche TCP-Ports (z.B. [80, 443]). Leer = nur SSH (und optional ICMP)."
 }
 
 variable "allow_icmp" {
   type        = bool
   default     = true
-  description = "Allow ping (ICMP)"
+  description = "Ping (ICMP) erlauben"
+}
+
+############################
+# Backend-Defaults
+############################
+
+variable "key_pair" {
+  type        = string
+  description = "OpenStack Keypair Name (für SSH, meist fix pro Projekt)"
+  default     = ""
+}
+
+variable "network_uuid" {
+  description = "UUID of the internal network to attach the instance to (NOT the external network)"
+  type        = string
+  default     = "34a00b87-57ce-42c4-8e1b-9ea8a657ec2e"  
+}
+
+variable "floating_ip_pool" {
+  description = "Name of the floating IP pool (external network). Leave empty to use default."
+  type        = string
+  default     = "DHBW"  
+}
+
+variable "ssh_cidr" {
+  type        = string
+  default     = "0.0.0.0/0"
+  description = "CIDR, aus der SSH erlaubt ist (empfohlen: deine.ip/32)"
 }
 
 variable "metadata" {
   type        = map(string)
   default     = {}
-  description = "Metadata applied to the instance"
+  description = "Zusätzliche Metadata für die Instanzen"
 }

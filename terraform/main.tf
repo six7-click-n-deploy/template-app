@@ -26,8 +26,7 @@ data "openstack_images_image_v2" "image" {
 
 # External network nur nötig, wenn Floating IP aktiviert ist
 data "openstack_networking_network_v2" "external" {
-  count = var.enable_floating_ip ? 1 : 0
-  name  = var.floating_ip_pool
+  name = var.floating_ip_pool
 }
 
 resource "random_id" "suffix" {
@@ -75,6 +74,28 @@ resource "openstack_networking_secgroup_rule_v2" "icmp" {
   security_group_id = openstack_networking_secgroup_v2.app_sg.id
 }
 
+# Allow HTTP 
+resource "openstack_networking_secgroup_rule_v2" "http" {
+  direction         = "ingress"
+  ethertype         = "IPv4"
+  protocol          = "tcp"
+  port_range_min    = 80
+  port_range_max    = 80
+  remote_ip_prefix  = "0.0.0.0/0"
+  security_group_id = openstack_networking_secgroup_v2.app_sg.id
+}
+
+# Allow HTTPS
+resource "openstack_networking_secgroup_rule_v2" "https" {
+  direction         = "ingress"
+  ethertype         = "IPv4"
+  protocol          = "tcp"
+  port_range_min    = 443
+  port_range_max    = 443
+  remote_ip_prefix  = "0.0.0.0/0"
+  security_group_id = openstack_networking_secgroup_v2.app_sg.id
+}
+
 # -----------------------------------------------------------------------------
 # Instance
 # -----------------------------------------------------------------------------
@@ -98,11 +119,13 @@ resource "openstack_compute_instance_v2" "app" {
 # -----------------------------------------------------------------------------
 resource "openstack_networking_floatingip_v2" "fip" {
   count = var.enable_floating_ip ? 1 : 0
-  pool  = data.openstack_networking_network_v2.external[0].name
+  pool  = data.openstack_networking_network_v2.external.name
 }
 
-resource "openstack_networking_floatingip_associate_v2" "fip_assoc" {
+resource "openstack_compute_floatingip_associate_v2" "fip_assoc" {
   count       = var.enable_floating_ip ? 1 : 0
   floating_ip = openstack_networking_floatingip_v2.fip[0].address
-  port_id     = openstack_compute_instance_v2.app.network[0].port
+  instance_id = openstack_compute_instance_v2.app.id
+
+  depends_on = [openstack_compute_instance_v2.app]
 }

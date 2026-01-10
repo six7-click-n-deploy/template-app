@@ -21,53 +21,42 @@ echo "Updating package lists..."
 sudo apt-get update
 
 # -----------------------------------------------------------------------------
-# [1] Runtime installieren (Beispiele, NICHT ausfüllen):
-# - apt-get install -y <packages>
-# - docker + compose
-# - language runtime (node/go/java/python/...)
+# [1] Runtime installieren: minimaler Webserver (nginx)
 # -----------------------------------------------------------------------------
-# echo "Install runtime..."
-# sudo DEBIAN_FRONTEND=noninteractive apt-get install -y <your-packages>
+echo "Installing nginx (if not already installed)..."
+sudo DEBIAN_FRONTEND=noninteractive apt-get install -y nginx
+
+echo "Enabling and restarting nginx..."
+sudo systemctl enable nginx
+sudo systemctl restart nginx
 
 # -----------------------------------------------------------------------------
-# [2] App-Artefakt auf die VM bringen (Beispiele):
-# - aus Image-Context kopieren (files provisioner) -> dann hier entpacken
-# - git clone (nur wenn du damit leben kannst)
-# - download aus Artifact Repo (curl/wget)
+# [2] App-Artefakt: einfache HTML-Seite
 # -----------------------------------------------------------------------------
-# echo "Deploy application files..."
-# sudo mkdir -p /opt/app
-# sudo tar -xzf /tmp/app.tar.gz -C /opt/app
+echo "Deploying simple index.html..."
+sudo mkdir -p /var/www/html
+
+sudo tee /var/www/html/index.html >/dev/null << 'EOF'
+<html>
+  <head>
+    <title>myapp2</title>
+  </head>
+  <body>
+    <h1>Hello from myapp2!</h1>
+    <p>Built with Packer & deployed with Terraform.</p>
+  </body>
+</html>
+EOF
 
 # -----------------------------------------------------------------------------
-# [3] Konfiguration + systemd service erstellen (Beispiele):
-# - /etc/<app>/*
-# - /etc/systemd/system/<app>.service
+# [3] (Optional) eigener systemd-Service
+# - hier nicht nötig, nginx reicht als Webserver
 # -----------------------------------------------------------------------------
-# echo "Configure systemd service..."
-# sudo tee /etc/systemd/system/myapp.service >/dev/null <<'EOF'
-# [Unit]
-# Description=My App
-# After=network-online.target
-# Wants=network-online.target
-#
-# [Service]
-# Type=simple
-# WorkingDirectory=/opt/app
-# ExecStart=/opt/app/myapp
-# Restart=always
-# RestartSec=2
-#
-# [Install]
-# WantedBy=multi-user.target
-# EOF
-#
-# sudo systemctl daemon-reload
-# sudo systemctl enable --now myapp.service
+# Beispiel bleibt auskommentiert
 
 # -----------------------------------------------------------------------------
 # [4] Optional: Reverse Proxy / TLS / Firewall
-# - nginx/caddy/traefik etc. (hier bewusst nur als Platz)
+# - für das Minimal-Beispiel nicht nötig
 # -----------------------------------------------------------------------------
 
 # -----------------------------------------------------------------------------
@@ -76,4 +65,4 @@ sudo apt-get update
 # sudo apt-get clean
 # sudo rm -rf /var/lib/apt/lists/*
 
-echo "Provisioning finished (template)."
+echo "Provisioning finished."
