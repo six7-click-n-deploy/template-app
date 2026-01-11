@@ -1,14 +1,15 @@
-# Terraform files
+# Terraform
 .terraform/
 *.tfstate
 *.tfstate.*
 .terraform.lock.hcl
-terraform.tfvars
 
-# Packer files
+# Packer
 packer_cache/
 *.box
-*.pkrvars.hcl
 
 # OS files
 .DS_Store
+
+# Cloud Config
+clouds.yaml
