@@ -388,6 +388,8 @@ runcmd:
 - `runcmd` darf **keine Doppelpunkte außerhalb von Strings** enthalten — diese brechen das YAML-Parsing und cloud-init führt gar nichts aus
 - Terraform-Template-Variablen (`${variable}`, `%{ for ... }`) werden zur Plan-Zeit ersetzt; `%%` schreibt ein literales `%`
 
+Eine beispielhafte Implementierung mit allen drei Abschnitten (`bootcmd`, `write_files`, `runcmd`) ist in der Template-App unter `terraform/user-data.yaml.tpl` hinterlegt.
+
 ---
 
 
