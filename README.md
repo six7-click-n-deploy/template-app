@@ -14,18 +14,23 @@ Es enthält **keine App**. Du füllst nur die Stellen aus, an denen du deine eig
 template-app/
 ├── packer/
 │   ├── template.pkr.hcl          # Packer Template (Image Build)
-│   ├── packer.pkrvars.hcl.example  # Beispiel-Variablen (kopieren/ausfüllen)
+│   ├── variables.pkr.hcl         # Packer-Variablen mit @openstack:-Annotationen
 │   └── scripts/
-│       └── provision.sh          # Provisioning Skeleton (DEIN Inhalt)
+│       └── provision.sh          # Provisioning Script (DEIN Inhalt)
 │
 ├── terraform/
-│   ├── main.tf                   # OpenStack Ressourcen (VM, SG, FIP)
-│   ├── variables.tf              # Variablen
-│   ├── outputs.tf                # Outputs
-│   └── terraform.tfvars.example  # Beispiel-Variablen (kopieren/ausfüllen)
+│   ├── main.tf                   # OpenStack Ressourcen (VMs, Ports, Floating IPs)
+│   ├── variables.tf              # Variablen mit [BACKEND]/[CONTRACT]-Annotationen
+│   ├── outputs.tf                # Outputs (user_accounts, team_vms, teams_summary)
+│   ├── user-data.yaml.tpl        # cloud-init Template (User-Credentials, runcmd)
+│   └── terraform.tfvars          # Lokale Konfiguration (nicht committen)
 │
-├── .github/workflows/
-│   └── terraform.yml             # GitHub Actions CI/CD
+├── .github/
+│   ├── workflows/
+│   │   ├── packer.yml            # CI: packer fmt + validate
+│   │   └── terraform.yml         # CI: terraform fmt + validate + tflint + tfsec
+│   └── actions/
+│       └── action.yml            # Custom Action: Packer installieren
 ├── .gitignore
 └── README.md
 ```
