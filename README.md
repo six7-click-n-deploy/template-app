@@ -8,7 +8,7 @@ Es enthält **keine App**. Du füllst nur die Stellen aus, an denen du deine eig
 
 ---
 
-## Struktur
+## Struktur (mit User Management)
 
 ```plaintext
 template-app/
@@ -37,17 +37,24 @@ template-app/
 
 ---
 
-## Voraussetzungen
+## Voraussetzungen für lokale Entwicklung
 
 - **Packer** >= 1.9
 - **Terraform** >= 1.5
 - **OpenStack Zugang** (clouds.yaml oder OS_* env vars)
-- Optional: **OpenStack CLI** (für Debug/Listen/Löschen)
 
 ### macOS (Homebrew)
 
 ```bash
-brew install packer terraform python-openstackclient
+brew install packer
+brew install terraform
+```
+
+### Windows (winget)
+
+```bash
+winget install Hashicorp.Packer
+winget install Hashicorp.Terraform
 ```
 
 ---
@@ -84,21 +91,6 @@ clouds:
     identity_api_version: 3
 ```
 
-Rechte setzen:
-```bash
-chmod 600 ~/.config/openstack/clouds.yaml
-```
-
-Cloud auswählen:
-```bash
-export OS_CLOUD=openstack
-```
-
-Test:
-```bash
-openstack token issue
-```
-
 ---
 
 ## Schritt 1: Repo als Template nutzen
@@ -106,11 +98,6 @@ openstack token issue
 Auf GitHub das Template-Repository öffnen: **[six7-click-n-deploy/template-app](https://github.com/six7-click-n-deploy/template-app)**
 
 Oben rechts auf **"Use this template"** → **"Create a new repository"** klicken.
-
-> **Wichtig bei privaten Repositories:** Den Collaborator **`six7clickndeploy`** zum Repository hinzufügen, damit der AppStore Zugriff hat:
-> **Settings → Collaborators → Add people → `six7clickndeploy`**
->
-> Bei öffentlichen Repositories ist dieser Schritt nicht notwendig.
 
 Anschließend das neue Repository lokal klonen und bearbeiten:
 ```bash
@@ -507,52 +494,14 @@ Schlägt einer dieser Checks fehl, wird der Workflow als fehlgeschlagen markiert
 
 ---
 
-## Minimaler Quickstart
-
-```bash
-# 1) Auth
-export OS_CLOUD=openstack
-
-# 2) Image bauen
-cd packer
-packer init .
-packer fmt .
-packer validate .
-packer build .
-
-# 3) Deploy
-cd ../terraform
-terraform init
-terraform fmt
-terraform validate
-terraform plan
-terraform apply
-```
-
----
-
-## Best Practices
-
-### Sicherheit
-- **Secrets niemals hardcoden**: Nutze Umgebungsvariablen, Vault oder Cloud-Init
-- **SSH-Zugriff beschränken**: Setze `ssh_cidr` auf deine spezifische IP statt `0.0.0.0/0`
-- **Security Groups minimalistisch**: Nur benötigte Ports öffnen
-
-### Entwicklung
-- **Idempotenz**: `provision.sh` muss mehrfach ausführbar sein
-- **Versionierung**: Nutze semantische Versionierung für Image-Namen
-- **Testing**: Teste Image-Builds in separater Umgebung
-
-### Operations
-- **Monitoring**: Implementiere Health-Checks in deiner App
-- **Logs**: Nutze structured logging (JSON) für bessere Auswertung
-- **Backups**: Plane Backup-Strategien für persistente Daten
-
----
-
 ## Schritt 6: App dem AppStore hinzufügen
 
 Sobald das Repository fertig entwickelt und auf GitHub gepusht ist, kann die App im AppStore registriert werden.
+
+> **Wichtig bei privaten Repositories:** Den Collaborator **`six7clickndeploy`** zum Repository hinzufügen, damit der AppStore Zugriff hat:
+> **Settings → Collaborators → Add people → `six7clickndeploy`**
+>
+> Bei öffentlichen Repositories ist dieser Schritt nicht notwendig.
 
 Dafür wird lediglich die **GitHub-URL des Repositories** benötigt, z.B.:
 
@@ -561,3 +510,9 @@ https://github.com/<dein-username>/<repo-name>
 ```
 
 Diese URL im AppStore unter **"App hinzufügen"** eintragen — der AppStore liest daraufhin die Konfiguration (Variablen, Packer-Template, Terraform) automatisch aus dem Repository ein.
+
+ToDo: Beschreibung zu App Entwickler müssen eine umfängliche Beschreibung im AppStore realisieren
+ToDo: Der App Entwickler muss ein Release erstellen für den AppStore
+ToDo: Generell darauf achten wann man muss schreibt und wann es eher ein Feature ist, dass implementiert werden kann.
+ToDo: (Nicht für die Anleitung sondern für mich) Versionen in GitHub aufräumen
+ToDO: Ordnerstruktur für single image und multi image App
