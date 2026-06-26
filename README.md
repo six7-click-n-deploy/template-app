@@ -1,82 +1,56 @@
-# OpenStack Template: Packer (Image) + Terraform (Deployment)
+# App-Entwickler-Anleitung
 
-Dieses Repository ist ein **Template** für OpenStack-Projekte mit sauberer Trennung von:
-- **Packer**: baut ein wiederverwendbares **Image**
-- **Terraform**: deployt **Infrastruktur** (VM, Security Group, optional Floating IP)
-
-Es enthält **keine App**. Du füllst nur die Stellen aus, an denen du deine eigene Anwendung/Runtime ins Image bringst.
+Diese Anleitung richtet sich an App-Entwickler, die eine App für die Click-n-Deploy-Plattform bauen wollen. Sie beschreibt alle Anforderungen und Möglichkeiten — von der minimalen App bis hin zu erweiterten Funktionen wie Packer-Images, User-Management und File-Uploads.
 
 ---
 
-## Struktur (mit User Management)
+## 1. Was ist eine App?
 
-```plaintext
-template-app/
-├── packer/
-│   ├── template.pkr.hcl          # Packer Template (Image Build)
-│   ├── variables.pkr.hcl         # Packer-Variablen mit @openstack:-Annotationen
-│   └── scripts/
-│       └── provision.sh          # Provisioning Script (DEIN Inhalt)
-│
-├── terraform/
-│   ├── main.tf                   # OpenStack Ressourcen (VMs, Ports, Floating IPs)
-│   ├── variables.tf              # Variablen mit [BACKEND]/[CONTRACT]-Annotationen
-│   ├── outputs.tf                # Outputs (user_accounts, team_vms, teams_summary)
-│   ├── user-data.yaml.tpl        # cloud-init Template (User-Credentials, runcmd)
-│   └── terraform.tfvars          # Lokale Konfiguration (nicht committen)
-│
-├── .github/
-│   ├── workflows/
-│   │   ├── packer.yml            # CI: packer fmt + validate
-│   │   └── terraform.yml         # CI: terraform fmt + validate + tflint + tfsec
-│   └── actions/
-│       └── action.yml            # Custom Action: Packer installieren
-├── .gitignore
-└── README.md
-```
+Eine App ist ein **Git-Repository** (GitHub oder GitLab) mit einem `terraform/`-Verzeichnis und einem optionalen `packer/`-Verzeichnis.
+
+Die Plattform klont das Repo bei jedem Deploy auf einen versionierten Git-Tag, baut ggf. die in `packer/` definierten Images und wendet den `terraform/`-Plan gegen das OpenStack-Backend an. Die durch Terraform exportierten Outputs werden vom Backend gelesen, um Zugangsdaten an Endnutzer zu mailen und das Infrastruktur-Panel im UI zu befüllen.
 
 ---
 
-## Voraussetzungen für lokale Entwicklung
+## 2. Voraussetzungen für lokale Entwicklung
 
-- **Packer** >= 1.9
 - **Terraform** >= 1.5
-- **OpenStack Zugang** (clouds.yaml oder OS_* env vars)
+- **Packer** >= 1.9 (nur wenn ein eigenes Image gebaut wird)
+- **OpenStack-Zugang** (`clouds.yaml`)
 
-### macOS (Homebrew)
+### Installation (macOS)
 
 ```bash
-brew install packer
 brew install terraform
+brew install packer
 ```
 
-### Windows (winget)
+### Installation (Windows)
 
 ```bash
-winget install Hashicorp.Packer
 winget install Hashicorp.Terraform
+winget install Hashicorp.Packer
 ```
 
----
-
-## OpenStack Auth (lokal, nicht committen)
-
-**Empfohlen: `clouds.yaml`**
+### OpenStack Auth (`clouds.yaml`)
 
 Die `clouds.yaml` kann direkt aus OpenStack heruntergeladen werden:
 **Profil (oben rechts) → OpenStack clouds.yaml-Datei herunterladen**
 
-> **Wichtig:** Die heruntergeladene Datei enthält kein Passwort. Die folgende Zeile muss manuell unter `auth:` ergänzt werden:
-> ```yaml
->       password: "<DEIN PASSWORT>"
-> ```
+Die heruntergeladene Datei enthält kein Passwort — folgende Zeile muss manuell unter `auth:` ergänzt werden:
 
-Die clouds.yaml-Datei muss dem Standardpfad eingefügt werden:
-```plaintext
+```yaml
+password: "<DEIN PASSWORT>"
+```
+
+Standardpfad:
+
+```
 ~/.config/openstack/clouds.yaml
 ```
 
 Beispiel:
+
 ```yaml
 clouds:
   openstack:
@@ -91,352 +65,675 @@ clouds:
     identity_api_version: 3
 ```
 
+> **Wichtig:** Der Profilname in der `clouds.yaml` **muss** `openstack` heißen — die Plattform erwartet genau diesen Namen.
+
 ---
 
-## Schritt 1: Repo als Template nutzen
+## 3. Repository erstellen
 
-Auf GitHub das Template-Repository öffnen: **[six7-click-n-deploy/template-app](https://github.com/six7-click-n-deploy/template-app)**
+### Option A: Template der Organisation nutzen (empfohlen)
 
-Oben rechts auf **"Use this template"** → **"Create a new repository"** klicken.
+Das Template-Repository unter [six7-click-n-deploy/template-app](https://github.com/six7-click-n-deploy/template-app) auf GitHub öffnen und oben rechts auf **"Use this template"** → **"Create a new repository"** klicken. Anschließend das neue Repository lokal klonen:
 
-Anschließend das neue Repository lokal klonen und bearbeiten:
 ```bash
 git clone <DEINE_REPO_URL>
 cd <REPO_NAME>
 ```
 
----
-
-## Schritt 2: Packer konfigurieren (Image Build)
-
-### 2.1 Variablen konfigurieren (`variables.pkr.hcl`)
-
-Die Packer-Variablen werden in `packer/variables.pkr.hcl` definiert. Diese Variablen werden vom AppStore beim Deployment angezeigt — der Nutzer trifft dort eine Auswahl. Damit das UI die Variablen korrekt darstellt, müssen sie einer festen Beschreibungs-Konvention folgen.
-
-**Pflicht-Variablen für jedes Packer-Image:**
-
-```hcl
-variable "image_name" {
-  type        = string
-  description = "@openstack:image:name"
-  default     = "my-app-vX"
-}
-
-variable "networks" {
-  type        = list(string)
-  description = "@openstack:network:id:list"
-  default     = ["4971e080-966d-485e-a161-3e2b7fefad53"]
-}
-
-variable "security_groups" {
-  type        = list(string)
-  description = "@openstack:security_group:id:list"
-  default     = ["<SECURITY-GROUP-ID>"]
-}
-```
-
-**Beschreibungs-Konvention:**
-
-Die `description` muss folgendem Format folgen, damit der AppStore die Variable korrekt im UI anzeigt:
+Das Template enthält bereits eine vollständige Struktur:
 
 ```
-@openstack:<type>:<mode>:<multi>
+template-app/
+├── packer/
+│   ├── template.pkr.hcl          # Packer Template (Image Build)
+│   ├── variables.pkr.hcl         # Packer-Variablen
+│   └── scripts/
+│       └── provision.sh          # Provisioning Script
+│
+├── terraform/
+│   ├── main.tf                   # OpenStack Ressourcen
+│   ├── variables.tf              # Variablen
+│   ├── outputs.tf                # Outputs
+│   ├── user-data.yaml.tpl        # cloud-init Template
+│   └── terraform.tfvars          # Lokale Konfiguration (nicht committen)
+│
+├── .github/
+│   ├── workflows/
+│   │   ├── packer.yml            # CI: packer fmt + validate
+│   │   └── terraform.yml         # CI: terraform fmt + validate + tflint + tfsec
+│   └── actions/
+│       └── action.yml            # Custom Action: Packer installieren
+├── .gitignore
+└── README.md
 ```
 
-| Platzhalter | Mögliche Werte |
-|-------------|----------------|
-| `type` | `network`, `subnet`, `flavor`, `image`, `keypair`, `security_group`, `floating_ip_pool`, `volume`, `router`, `availability_zone` |
-| `mode` | `id` oder `name` |
-| `multi` | `list` oder `single` |
+Das Template setzt bereits **User-Management** und ein **Single-Packer-Image** um — beides ist optional und kann entfernt werden, wenn es nicht benötigt wird.
 
-Je nach Annotation rendert der AppStore die passende Auswahl-Komponente (z.B. Dropdown für `name`, Multi-Select für `list`). Im Feld `default` können Standardwerte hinterlegt werden.
+### Option B: Eigenes Repository ohne Template
 
-Der Wert im `default`-Feld wird im AppStore als Standardwert vorausgefüllt angezeigt.
-
-
-### 2.2 Provisioning anpassen (DEIN Inhalt)
-
-**Datei:** `packer/scripts/provision.sh`
-
-Hier definierst du, was ins Image kommt:
-- Pakete/Runtime installieren
-- App-Artefakte deployen (z.B. Binary, Container, Webapp)
-- Konfiguration
-- systemd Services
-- (optional) Reverse Proxy / TLS
-
-**Wichtig:**
-- keine Secrets hardcoden
-- idempotent schreiben (mehrfaches Ausführen sollte nicht kaputt machen)
+Ein eigenes Git-Repository kann ebenfalls genutzt werden. Die Mindestanforderung ist ein `terraform/`-Verzeichnis mit den drei Pflichtdateien (siehe Abschnitt 4).
 
 ---
 
-## Schritt 3: Image bauen
+## 4. Minimale App (ohne Packer, ohne User-Management)
 
-Im `packer/` Ordner:
-```bash
-packer init .
-packer validate .
-packer build .
-```
-
-**Ergebnis:**
-- Neues Image erscheint in OpenStack (Glance)
-- Image-Name entspricht `image_name` (wird später in Terraform verwendet)
-
----
-
-## Schritt 4: Terraform konfigurieren
-
-### 4.1 Variablen (`variables.tf`)
-
-Die Terraform-Variablen folgen derselben `@openstack:`-Konvention wie bei Packer. **Pflicht-Variablen** für jede App:
-
-**Beschreibungs-Konvention:**
+Die kleinste funktionierende App besteht aus drei Dateien im `terraform/`-Verzeichnis:
 
 ```
-@openstack:<type>:<mode>
+my-app/
+└── terraform/
+    ├── main.tf
+    ├── variables.tf
+    └── outputs.tf
 ```
 
-| Platzhalter | Mögliche Werte |
-|-------------|----------------|
-| `type` | `network`, `subnet`, `flavor`, `image`, `keypair`, `security_group`, `floating_ip_pool`, `volume`, `router`, `availability_zone` |
-| `mode` | `id` oder `name` |
-
-Zusätzlich können Variablen mit `[BACKEND]` oder `[CONTRACT]` als Präfix in der `description` markiert werden:
-- `[BACKEND]` — wird vom AppStore/Platform-Admin gesetzt
-- `[CONTRACT]` — wird vom Deployer (z.B. Dozent) im AppStore gesetzt
+### `terraform/main.tf`
 
 ```hcl
-variable "image_name" {
-  description = "[BACKEND] Name des Packer-Images @openstack:image:name"
-  type        = string
-  default     = "my-app-vX"
+terraform {
+  required_providers {
+    openstack = {
+      source  = "terraform-provider-openstack/openstack"
+      version = "~> 1.54"
+    }
+  }
 }
 
-variable "network_uuid" {
-  description = "[BACKEND] UUID des internen Netzwerks @openstack:network:id"
-  type        = string
-  default     = "34a00b87-57ce-42c4-8e1b-9ea8a657ec2e"
+provider "openstack" {
+  cloud = "openstack"
 }
 
-variable "floating_ip_pool" {
-  description = "[BACKEND] Name des External Networks für Floating IPs @openstack:floating_ip_pool:name"
-  type        = string
-  default     = "DHBW"
-}
+resource "openstack_compute_instance_v2" "vm" {
+  name        = "my-app-vm"
+  image_name  = "Ubuntu 22.04"
+  flavor_name = var.flavor_name
 
-variable "shared_secgroup_id" {
-  description = "[BACKEND] ID der gemeinsamen Security Group @openstack:security_group:id"
-  type        = string
-  default     = "4ffaf007-df66-4250-9118-1bd99378d34a"
+  network {
+    uuid = var.network_uuid
+  }
 }
 ```
 
-**Optionale Variablen:**
+### `terraform/variables.tf`
+
+Variablen, die der AppStore oder der Nutzer beim Deployment konfiguriert, werden hier deklariert. Für lokales Testen kann eine `terraform.tfvars`-Datei angelegt werden (nicht committen — steht im `.gitignore`).
 
 ```hcl
-# Bei Apps mit User Management:
+################################################
+# PFLICHT-Variablen
+################################################
 variable "users" {
-  description = "[CONTRACT] Teams mit User-Emails"
+  description = "Per-team roster — vom Worker injiziert. @platform:internal"
   type = map(list(object({
     email = string
   })))
   default = {}
 }
 
-# Bei Apps mit Datei-Übergabe:
-variable "assignment_files" {
-  description = "[CONTRACT] Hochgeladene Begleitmaterialien @openstack:file:all"
-  type = map(object({
-    name         = string
-    content_b64  = string
-    size         = number
-    content_type = string
-  }))
-  default = {}
+# image_name ist nur Pflicht wenn packer existiert
+variable "image_name" {
+  description = "Glance-Image-Name — vom Worker zur Apply-Zeit gesetzt. @platform:internal"
+  type        = string
+}
+
+################################################
+# Beispiele frei konfigurierbarer Variable
+################################################
+variable "flavor_name" {
+  description = "VM-Größe @openstack:flavor:name"
+  type        = string
+  default     = "gp1.small"
+}
+
+variable "network_uuid" {
+  description = "Hauptnetzwerk @openstack:network:id"
+  type        = string
 }
 ```
 
-Der Wert im `default`-Feld wird im AppStore als Standardwert vorausgefüllt angezeigt.
+### `terraform/outputs.tf`
 
----
-
-### 4.2 Outputs (`outputs.tf`)
-
-Die Datei `outputs.tf` definiert was nach dem Deployment ausgegeben wird — der AppStore liest diese Werte aus und zeigt sie dem Nutzer an.
-
-**Bei Apps mit User Management sind folgende Outputs Pflicht:**
+Outputs werden vom AppStore ausgelesen und dem Nutzer angezeigt. Auch wenn keine Daten zurückgegeben werden sollen, **müssen** alle drei Outputs deklariert sein.
 
 ```hcl
-# CONTRACT-SCHEMA:
-# local.user_accounts = {
-#   "<team>-<username>": {
-#     type     = "password"
-#     ip       = "1.2.3.4"
-#     port     = 80
-#     username = "alice@example.com"
-#     auth     = "<passwort>"
-#   }
-# }
-
 output "user_accounts" {
-  description = "[CONTRACT] User accounts mit Zugangsdaten"
-  value       = local.user_accounts
+  description = "User-Zugangsdaten"
   sensitive   = true
+  value       = {}
 }
 
 output "team_vms" {
   description = "Details aller Team-VMs"
-  value = {
-    for team in local.teams_list : team => {
-      instance_id   = openstack_compute_instance_v2.team_vm[team].id
-      instance_name = openstack_compute_instance_v2.team_vm[team].name
-      fixed_ip      = openstack_networking_port_v2.team_port[team].all_fixed_ips[0]
-      floating_ip   = local.enable_floating_ip ? openstack_networking_floatingip_v2.team_fip[team].address : null
-      url           = "http://${...}"
+  value       = {}
+}
+
+output "teams_summary" {
+  description = "Übersicht: Teams und User-Anzahl"
+  value       = {}
+}
+```
+
+### `terraform/terraform.tfvars` (lokal, nicht committen)
+
+```hcl
+flavor_name  = "gp1.small"
+network_uuid = "34a00b87-57ce-42c4-8e1b-9ea8a657ec2e"
+```
+
+---
+
+## 5. Pflichtanforderungen für den AppStore
+
+Damit die App im AppStore korrekt funktioniert, **müssen** folgende Variablen in `variables.tf` deklariert sein:
+
+### `users` (immer Pflicht)
+
+```hcl
+variable "users" {
+  description = "Vom Worker injiziert. @platform:internal"
+  type = map(list(object({
+    email = string
+  })))
+  default = {}
+}
+```
+
+Der AppStore injiziert beim Deployment die Teams und zugehörigen User in diese Variable. Die Struktur ist dabei eine Map, bei der der Key der Team-Name ist und der Wert eine Liste von Nutzern mit ihrer E-Mail-Adresse. Wie der App-Entwickler mit dieser Struktur intern umgeht (ob er Teams als getrennte VMs deployt, eine gemeinsame VM baut, etc.), ist ihm überlassen.
+
+### `image_name` (Pflicht wenn `packer/` existiert)
+
+```hcl
+variable "image_name" {
+  description = "Glance-Image-Name — vom Worker zur Apply-Zeit gesetzt. @platform:internal"
+  type        = string
+}
+```
+
+Der AppStore setzt diesen Wert automatisch auf den Namen des gebauten Packer-Images. Die Variable darf nicht im Deployment-Wizard erscheinen — dafür sorgt der `@platform:internal`-Marker (siehe Abschnitt 5.3).
+
+---
+
+## 6. Optionale Funktionen
+
+### 6.1 Packer — Eigenes VM-Image bauen
+
+Packer ermöglicht es, ein eigenes VM-Image zu bauen, das bereits alle nötigen Abhängigkeiten, Konfigurationen und Applikationen enthält. Statt bei jedem Deployment alles neu zu installieren, wird das Image einmalig gebaut und danach für alle Deployments wiederverwendet. Der AppStore baut das Packer-Image automatisch vor dem Terraform-Deployment.
+
+#### Struktur
+
+```
+my-app/
+├── packer/
+│   ├── template.pkr.hcl
+│   ├── variables.pkr.hcl
+│   └── scripts/
+│       └── provision.sh
+└── terraform/
+    └── ...
+```
+
+#### `packer/variables.pkr.hcl`
+
+Definiert die Eingabevariablen für den Packer-Build. Pflicht-Variablen:
+
+```hcl
+variable "image_name" {
+  type        = string
+  description = "Glance-Image-Name — vom Worker zur Build-Zeit gesetzt. @platform:internal"
+}
+
+variable "networks" {
+  type        = list(string)
+  description = "@openstack:network:id:list Build-Netzwerke"
+  default     = ["<NETWORK-ID>"]
+}
+
+variable "security_groups" {
+  type        = list(string)
+  description = "@openstack:security_group:id:list Build-Security-Groups"
+  default     = ["<SECURITY-GROUP-ID>"]
+}
+```
+
+#### `packer/template.pkr.hcl`
+
+Definiert die Build-Quelle und ruft das Provisioning Script auf:
+
+```hcl
+packer {
+  required_plugins {
+    openstack = {
+      source  = "github.com/hashicorp/openstack"
+      version = "~> 1"
     }
   }
 }
-```
 
-Die Feldnamen in `user_accounts` (`type`, `ip`, `port`, `username`, `auth`) und der Output-Name `team_vms` sind **fix** — der AppStore erwartet exakt diese Struktur.
+source "openstack" "image" {
+  image_name        = var.image_name
+  source_image_name = "Ubuntu 22.04"
+  flavor            = "gp1.small"
+  networks          = var.networks
+  security_groups   = var.security_groups
+  ssh_username      = "ubuntu"
+}
 
-**Empfohlen zusätzlich:**
+build {
+  sources = ["source.openstack.image"]
 
-```hcl
-output "teams_summary" {
-  description = "Übersicht: Teams und User-Anzahl"
-  value = {
-    for team in local.teams_list : team => length([...])
+  provisioner "shell" {
+    script = "scripts/provision.sh"
   }
 }
 ```
 
----
+#### `packer/scripts/provision.sh`
 
-### 4.3 Lokale Konfiguration (`terraform.tfvars`)
+Hier wird definiert, was ins Image kommt. Typische Inhalte:
 
-Für lokales Testen wird eine `terraform.tfvars` angelegt (nicht committen — steht in `.gitignore`):
+- Pakete und Runtimes installieren
+- App-Artefakte deployen (Binary, Container, Webapp)
+- Konfigurationsdateien schreiben
+- systemd-Services einrichten
+- Optional: Reverse Proxy / TLS konfigurieren
 
-```hcl
-# Pflicht
-image_name         = "my-app-v1"
-network_uuid       = "34a00b87-57ce-42c4-8e1b-9ea8a657ec2e"
-floating_ip_pool   = "DHBW"
-shared_secgroup_id = "4ffaf007-df66-4250-9118-1bd99378d34a"
+```bash
+#!/bin/bash
+set -euo pipefail
 
-# Optional: User Management
-users = {
-  "Team-1" = [
-    { email = "alice@example.com" },
-    { email = "bob@example.com" }
-  ]
-}
+apt-get update -y
+apt-get install -y nginx
+
+# App-Installation hier...
+
+systemctl enable nginx
 ```
 
-Nach `terraform apply` enthält die `terraform.tfstate` alle Outputs sowie Details zu den erstellten Ressourcen (IPs, IDs, Zugangsdaten).
+**Wichtige Regeln:**
+- Keine Secrets hardcoden
+- Idempotent schreiben (mehrfaches Ausführen darf nichts kaputt machen)
 
 ---
 
-### 4.4 User Management (`user-data.yaml.tpl`)
+### 6.2 User-Management
 
-Die Datei `user-data.yaml.tpl` ist ein cloud-init-Template das beim VM-Boot ausgeführt wird. Sie übergibt Laufzeit-Daten (User-Credentials, Dateien) an die VM.
+User-Management ermöglicht es, jedem Endnutzer individuelle Zugangsdaten zu geben, sodass Nutzer abgegrenzt voneinander arbeiten können. Wie das User-Management technisch umgesetzt wird (getrennte VMs pro Team, Nutzerkonten auf einer VM, etc.) ist dem App-Entwickler überlassen.
 
-**Struktur und worauf App-Entwickler achten müssen:**
+Der AppStore liefert die Team- und Nutzerstruktur über die `users`-Variable (siehe Abschnitt 5). Die App muss die generierten Zugangsdaten über den `user_accounts`-Output zurückgeben, damit der AppStore sie per Mail an die Endnutzer versendet.
+
+#### Struktur mit User-Management
+
+```
+my-app/
+├── terraform/
+│   ├── main.tf
+│   ├── variables.tf
+│   ├── outputs.tf
+│   └── user-data.yaml.tpl    # cloud-init Template für Zugangsdaten
+└── ...
+```
+
+#### `terraform/user-data.yaml.tpl`
+
+Das cloud-init-Template wird beim VM-Start ausgeführt und übergibt Laufzeit-Daten (Zugangsdaten, Dateien) an die VM. Es wird in `main.tf` über `templatefile()` gerendert:
 
 ```yaml
 #cloud-config
 
 bootcmd:
-  # Wird sehr früh ausgeführt — vor write_files
-  # Verzeichnisse anlegen die write_files benötigt
+  # Vor write_files ausgeführt — Verzeichnisse anlegen die write_files benötigt
   - mkdir -p /etc/myapp/users
   - chown root:root /etc/myapp/users
   - chmod 750 /etc/myapp/users
 
 write_files:
-  # Pro User eine .env-Datei mit Zugangsdaten
-  # Terraform-Template-Syntax: %{ for ... ~} ... %{ endfor ~}
-# %{ for user in team_users ~}
-  - path: '/etc/myapp/users/...'
+%{ for user in team_users ~}
+  - path: '/etc/myapp/users/${user.email}.env'
     permissions: '0640'
-    owner: 'root:root'
+    owner: 'root:myapp'
     content: |
-      EMAIL=...
-      PASSWORD=...
-# %{ endfor ~}
+      EMAIL=${user.email}
+      PASSWORD=${user.password}
+%{ endfor ~}
 
 runcmd:
-  # Das Provision-Script ausführen — muss im Packer-Image vorhanden sein
   - bash /usr/local/bin/myapp-provision.sh > /var/log/myapp-provision.log 2>&1
 ```
 
-**Wichtige Regeln:**
+#### Output `user_accounts` (Pflicht für Mail-Versand)
 
-- `bootcmd` läuft **vor** `write_files` — Verzeichnisse die von `write_files` beschrieben werden, müssen hier angelegt werden
-- Dateiberechtigungen für Service-User: `owner: 'root:<service-user>'` + `permissions: '0640'` — nicht `root:root 0600`, sonst kann der laufende Dienst die Datei nicht lesen
-- **Kein eingebettetes Bash-Script** in `write_files` — komplexe Scripts gehören ins Packer-Image, nicht ins YAML
-- `runcmd` darf **keine Doppelpunkte außerhalb von Strings** enthalten — diese brechen das YAML-Parsing und cloud-init führt gar nichts aus
-- Terraform-Template-Variablen (`${variable}`, `%{ for ... }`) werden zur Plan-Zeit ersetzt; `%%` schreibt ein literales `%`
+Damit der AppStore Zugangsdaten per Mail versendet, **muss** `user_accounts` korrekt befüllt sein. Der Key **muss** die Form `<team-name>-<username>` haben:
 
-Eine beispielhafte Implementierung mit allen drei Abschnitten (`bootcmd`, `write_files`, `runcmd`) ist in der Template-App unter `terraform/user-data.yaml.tpl` hinterlegt.
+```hcl
+output "user_accounts" {
+  sensitive = true
+  value = {
+    "team-a-alice" = {
+      username = "alice"
+      type     = "password"
+      auth     = "hunter2"
+      ip       = "10.0.1.42"
+      port     = 8080
+    }
+  }
+}
+```
+
+**Verfügbare Auth-Typen:**
+
+| `type`     | Darstellung in der Mail        | Inhalt von `auth`          |
+|------------|-------------------------------|---------------------------|
+| `password` | "Password: …"                 | Passwort-String            |
+| `ssh_key`  | Monospace SSH-Key-Block        | Public-Key oder Hinweistext |
+| `oauth`    | "Login at …"-Link              | Login-URL                  |
+| `none`     | Kein Credential-Block          | `auth` kann fehlen         |
+
+#### `metadata.team` auf VM-Ressourcen
+
+Damit der AppStore VMs im Infrastruktur-Panel dem richtigen Team zuordnet, **sollte** jede VM ein `metadata`-Tag mit dem Team-Key erhalten:
+
+```hcl
+resource "openstack_compute_instance_v2" "team_vm" {
+  for_each = toset(local.teams)
+  name     = "vm-${each.key}"
+
+  metadata = {
+    team = each.key
+  }
+  # ...
+}
+```
+
+Ohne diesen Tag wird die VM im Panel unter "Shared" angezeigt.
 
 ---
 
+### 6.3 `@openstack`-Marker für Variablen
 
-## Schritt 5: Infrastruktur deployen
+Mit dem `@openstack`-Marker in der `description` einer Terraform- oder Packer-Variable steuert der App-Entwickler, welches UI-Element der AppStore-Wizard rendert. Ohne Marker erhält der Nutzer nur ein freies Textfeld. Je nach Marker öffnen sich Dropdown-Menüs (z.B. für Flavors oder Netzwerke), Multi-Select-Felder oder Datei-Upload-Felder.
+
+#### Übersicht aller Marker-Möglichkeiten
+
+```
+@openstack:<type>[:<mode>][:<multi>][:<var_scope>]
+```
+
+| Slot         | Mögliche Werte                                                                                                           | Default                  |
+|--------------|--------------------------------------------------------------------------------------------------------------------------|--------------------------|
+| `type`       | `network`, `subnet`, `flavor`, `image`, `keypair`, `security_group`, `floating_ip_pool`, `volume`, `router`, `availability_zone`, `file` | —         |
+| `mode`       | `id`, `name`                                                                                                             | `name`                   |
+| `multi`      | `single`, `multi` / `list`                                                                                               | aus HCL-Typ abgeleitet   |
+| `var_scope`  | `all`, `team`, `user`                                                                                                    | `all`                    |
+
+Der `@openstack`-Prefix ist case-insensitive. Mehrere Marker pro Description sind erlaubt — der erste Marker mit bekanntem Type gewinnt.
+
+#### Beispiele
+
+```hcl
+# Netzwerk-Picker (Name), Single-Select:
+variable "network_name" {
+  description = "@openstack:network:name Primäres Netzwerk"
+  type        = string
+}
+
+# Netzwerk-Picker (UUID), Multi-Select (z.B. für Packer):
+variable "networks" {
+  description = "@openstack:network:id:list Build-Netzwerke"
+  type        = list(string)
+}
+
+# Flavor-Picker, einer pro Team:
+variable "team_flavor_ids" {
+  description = "@openstack:flavor:id:single:team Flavor pro Team"
+  type        = map(string)
+  default     = {}
+}
+
+# Security-Group-Picker, Multi-Select:
+variable "secgroups" {
+  description = "@openstack:security_group:name:multi"
+  type        = list(string)
+}
+
+# Freies Textfeld pro User (kein OpenStack-Typ):
+variable "github_handles" {
+  description = "@openstack:::user GitHub-Username pro Endnutzer"
+  type        = map(string)
+  default     = {}
+}
+
+# Multi-Select Security Groups pro Team:
+variable "team_secgroups" {
+  description = "@openstack:security_group:name:multi:team"
+  type        = map(list(string))
+  default     = {}
+}
+```
+
+#### `var_scope`: Werte pro Team oder pro User
+
+Mit `:team` oder `:user` als letztem Slot rendert der Wizard einen Picker **pro Team bzw. pro User** und übergibt das Ergebnis als Map an Terraform.
+
+**Pflicht:** Wenn `var_scope` `team` oder `user` ist, **muss** der HCL-Typ ein `map(...)` sein — sonst schlägt die Approval mit `MARKER_SCOPED_REQUIRES_MAP` fehl.
+
+Kurzform für reinen `var_scope` ohne OpenStack-Typ: `@openstack::team` (Scope im Mode-Slot) ist äquivalent zu `@openstack:::team`.
+
+In Packer-Variablen ist `var_scope=team` oder `=user` **verboten** — ein Packer-Build erzeugt ein einzelnes Image, das von allen Teams gemeinsam genutzt wird.
+
+#### `@platform:internal` — Variablen aus dem Wizard ausblenden
+
+Variablen, die vom AppStore automatisch zur Laufzeit gesetzt werden, **müssen** mit `@platform:internal` markiert werden, damit sie nicht im Deployment-Wizard für den Nutzer erscheinen und fälschlich überschrieben werden können.
+
+```hcl
+variable "image_name" {
+  description = "Glance-Image-Name — vom Worker zur Apply-Zeit gesetzt. @platform:internal"
+  type        = string
+}
+
+variable "users" {
+  description = "Per-team roster — vom Worker injiziert. @platform:internal"
+  type        = map(list(object({ email = string })))
+  default     = {}
+}
+```
+
+Folgende Variablen werden vom AppStore automatisch injiziert und **müssen** deklariert sein:
+
+| Variable              | Wann injiziert                        |
+|-----------------------|---------------------------------------|
+| `users`               | Immer, sobald Teams im Deploy existieren |
+| `image_name`          | Bei Single-Packer-Image-Apps          |
+| `image_name_<key>`    | Bei Multi-Packer-Image-Apps (je Subdirectory-Key) |
+
+---
+
+### 6.4 File-Upload-Variablen
+
+Mit dem `@openstack:file:`-Marker kann der App-Entwickler Datei-Uploads im AppStore-Wizard ermöglichen. Der Dateiinhalt wird base64-encodiert in eine Terraform-Map injiziert und kann per `cloud-init` auf der VM materialisiert werden.
+
+**Pflicht** bei File-Uploads: Erlaubte Dateiendungen **müssen** angegeben werden. Als Trenner **muss** `|` verwendet werden (kein Komma).
+
+#### Marker-Form
+
+```
+@openstack:file:<scope>:<ext1>|<ext2>|...
+```
+
+- `<scope>` ∈ `all` | `team` | `user`
+- `<ext1>|<ext2>` — Pipe-separierte Liste erlaubter Extensions (lowercase, ohne Punkt)
+
+File-Marker sind in Packer-Variablen **verboten**.
+
+#### HCL-Typen je Scope
+
+| Scope  | HCL-Typ |
+|--------|---------|
+| `all`  | `map(object({ name=string, content_b64=string, content_type=string, size=number }))` |
+| `team` | `map(map(object({ name=string, content_b64=string, content_type=string, size=number })))` |
+| `user` | `map(map(object({ name=string, content_b64=string, content_type=string, size=number })))` |
+
+#### Beispiel: Ein Upload-Slot für alle Teams
+
+```hcl
+variable "assignment_files" {
+  description = <<-EOT
+    @openstack:file:all:pdf
+    Aufgabenstellung — eine PDF für alle Teams.
+  EOT
+  type = map(object({
+    name         = string
+    content_b64  = string
+    content_type = string
+    size         = number
+  }))
+  default = {}
+}
+```
+
+Konsum in `user-data.yaml.tpl`:
+
+```yaml
+write_files:
+%{ for slot_key, file in assignment_files ~}
+  - path: /opt/app/${file.name}
+    permissions: "0644"
+    encoding: b64
+    content: ${file.content_b64}
+%{ endfor ~}
+```
+
+#### Beispiel: Ein Slot pro Team
+
+```hcl
+variable "team_briefings" {
+  description = "@openstack:file:team:pdf|docx Briefing-Doku pro Team"
+  type = map(map(object({
+    name         = string
+    content_b64  = string
+    content_type = string
+    size         = number
+  })))
+  default = {}
+}
+```
+
+Der äußere Map-Key ist die Team-ID, der innere der Slot-Key.
+
+#### Wichtig: Verhalten beim Destroy
+
+Beim Destroy eines Deployments entfernt der AppStore alle file-shaped Variablen aus dem `-var`-Set. File-Variablen dürfen deshalb **nicht** in `count = …` oder `for_each = …` referenziert werden — beim Destroy wäre der Wert leer und Terraform würde Ressourcen fälschlich löschen wollen.
+
+---
+
+### 6.5 Multi-Packer-Image-Apps
+
+Statt eines einzelnen Images können mehrere Images parallel gebaut werden — z.B. ein separates Image für Webserver und Datenbank. Der Wechsel von Single- zu Multi-Image ist ausschließlich eine Frage des Verzeichnis-Layouts im `packer/`-Ordner.
+
+#### Struktur
+
+```
+my-app/
+├── packer/
+│   ├── webserver/
+│   │   ├── template.pkr.hcl
+│   │   ├── variables.pkr.hcl
+│   │   └── scripts/
+│   │       └── provision.sh
+│   └── database/
+│       ├── template.pkr.hcl
+│       ├── variables.pkr.hcl
+│       └── scripts/
+│           └── provision.sh
+└── terraform/
+    └── ...
+```
+
+Die Funktion der einzelnen Dateien (`template.pkr.hcl`, `variables.pkr.hcl`, `provision.sh`) ist dieselbe wie bei der Single-Image-App (siehe Abschnitt 6.1).
+
+**Regeln für Subdirectory-Keys** (Verzeichnisnamen):
+- Format: `[a-z][a-z0-9_-]{0,30}`
+- Ungültige Keys führen zu einem `PackerTemplateDiscoveryError`
+- Verzeichnisse ohne `template.pkr.hcl` (z.B. `_common/`, `scripts/`) werden ignoriert
+- Build-Reihenfolge: alphabetisch nach Verzeichnisname (`database` baut vor `webserver`)
+- Single- und Multi-Image gleichzeitig ist **verboten**: `packer/template.pkr.hcl` und `packer/<key>/template.pkr.hcl` dürfen nicht gleichzeitig existieren
+
+#### Packer-Variablen je Subdirectory
+
+In jedem Subdirectory referenziert das Template `var.image_name` — **nicht** `var.image_name_<key>`. Der AppStore injiziert pro Build den korrekten Namen:
+
+```hcl
+# packer/webserver/variables.pkr.hcl
+variable "image_name" {
+  type        = string
+  description = "Glance-Image-Name — vom Worker zur Build-Zeit gesetzt. @platform:internal"
+}
+```
+
+#### Terraform-Variablen für Multi-Image (Pflicht)
+
+Für jeden Packer-Subdirectory-Key **muss** eine separate `image_name_<key>`-Variable in `variables.tf` deklariert werden:
+
+```hcl
+variable "image_name_webserver" {
+  description = "Glance-Image-Name des Webserver-Images — vom Worker gesetzt. @platform:internal"
+  type        = string
+}
+
+variable "image_name_database" {
+  description = "Glance-Image-Name des Database-Images — vom Worker gesetzt. @platform:internal"
+  type        = string
+}
+```
+
+---
+
+## 7. Lokales Deployment
+
+### Nur Terraform (kein Packer)
 
 ```bash
+cd terraform
 terraform init
 terraform validate
-```
-
-Vor dem eigentlichen Deployment empfiehlt sich ein `terraform plan` um eine Vorschau zu erhalten:
-
-```bash
-terraform plan
-```
-
-Die Ausgabe zeigt u.a.:
-- Wie viele VMs mit der aktuellen Konfiguration deployed werden (z.B. `2 to add` bei zwei Teams)
-- Welche Ressourcen erstellt, geändert oder gelöscht werden (Ports, Floating IPs, Passwörter)
-- Eine Zusammenfassung am Ende: `Plan: X to add, Y to change, Z to destroy`
-
-Erst danach das Deployment starten:
-
-```bash
+terraform plan        # Vorschau: zeigt was erstellt/geändert/gelöscht wird
 terraform apply
 ```
 
-**Nach apply erhältst du folgende Outputs:**
-- `user_accounts` — Zugangsdaten aller User (sensitiv, nicht direkt angezeigt — mit `terraform output -json user_accounts` abrufbar)
+### Mit Packer (erst Image bauen, dann deployen)
+
+```bash
+# 1. Packer-Image bauen
+cd packer
+packer init .
+packer validate .
+packer build .
+
+# 2. Terraform deployen
+cd ../terraform
+terraform init
+terraform validate
+terraform plan
+terraform apply
+```
+
+**Nach `terraform apply` stehen folgende Outputs zur Verfügung:**
+- `user_accounts` — Zugangsdaten (sensitiv, abrufbar mit `terraform output -json user_accounts`)
 - `team_vms` — Details aller Team-VMs mit IP-Adressen und App-URL
 - `teams_summary` — Übersicht der Teams mit jeweiliger User-Anzahl
 
 ---
 
-## Was muss ich wann tun?
-
-| Änderung | Was tun? |
-|----------|----------|
-| `packer/scripts/provision.sh` | `packer build ...` |
-| `packer/template.pkr.hcl` | `packer build ...` |
-| Terraform .tf Dateien | `terraform apply` |
-| Ports (Security Group) | `terraform apply` |
-| Neues Image verwenden | `packer build ...` + `terraform apply` |
-
----
-
-## Cleanup
+## 8. Cleanup
 
 ### Infrastruktur entfernen
+
 ```bash
 cd terraform
 terraform destroy
 ```
 
-### Image entfernen (optional)
+### Packer-Image entfernen (optional)
+
 ```bash
 openstack image list
 openstack image delete <IMAGE_ID>
@@ -444,22 +741,19 @@ openstack image delete <IMAGE_ID>
 
 ---
 
-## GitHub Actions CI/CD
+## 9. Checks und CI/CD
 
-Beim Pushen in das Repository durchläuft der Code automatisch einen GitHub Actions Workflow. Damit dieser erfolgreich ist, sollten die folgenden Checks **lokal vorab** ausgeführt werden.
+Vor dem Pushen können folgende Checks lokal ausgeführt werden:
 
-**Voraussetzungen (einmalig installieren):**
+**Einmalige Installation (macOS):**
+
 ```bash
-# tflint
-brew install tflint          # macOS
-# oder: https://github.com/terraform-linters/tflint#installation
-
-# tfsec
-brew install tfsec           # macOS
-# oder: https://github.com/aquasecurity/tfsec#installation
+brew install tflint    
+brew install tfsec     
 ```
 
 **Terraform:**
+
 ```bash
 cd terraform
 terraform fmt          # Formatierung korrigieren
@@ -470,49 +764,62 @@ tfsec .                # Security-Check
 ```
 
 **Packer:**
+
 ```bash
 cd packer
 packer fmt .           # Formatierung korrigieren
 packer validate .      # Syntax prüfen
 ```
 
-Schlägt einer dieser Checks fehl, wird der Workflow als fehlgeschlagen markiert.
+### GitHub Actions Workflow (bei Nutzung des Templates)
+
+Wer das Template der Organisation nutzt, erhält automatisch zwei vorkonfigurierte GitHub Actions Workflows:
+
+| Workflow         | Datei                          | Was wird geprüft                                  |
+|------------------|--------------------------------|---------------------------------------------------|
+| Terraform CI     | `.github/workflows/terraform.yml` | `terraform fmt`, `terraform validate`, `tflint`, `tfsec` |
+| Packer CI        | `.github/workflows/packer.yml`    | `packer fmt`, `packer validate`                   |
+
+Diese Workflows laufen automatisch bei jedem Push. Schlägt einer der Checks fehl, wird der Workflow als fehlgeschlagen markiert.
 
 ---
 
-## Troubleshooting (kurz)
+## 10. App dem AppStore hinzufügen
 
-### Packer kommt nicht per SSH auf die Build-VM
-- `security_groups` in Packer müssen SSH erlauben (von deinem Runner/Bastion)
-- Wenn Build-VM nur intern erreichbar: Runner muss im selben Netz sein oder
-- `use_floating_ip=true` + `floating_ip_pool` setzen
+### Release / Git-Tag erstellen
 
-### VM ist deployed, aber Service nicht erreichbar
-- `allowed_tcp_ports` in Terraform setzen (z.B. [80] oder [443])
-- Service im Image läuft wirklich? (systemd status, logs, etc.)
-- ggf. `enable_floating_ip=false` → dann nur intern erreichbar (private IP)
+Die Plattform deployt ausschließlich versionierte Git-Tags — keinen Branch. Vor dem Hinzufügen der App im AppStore **muss** ein Release mit einem Git-Tag im folgenden Format erstellt werden:
 
----
+```
+v<Major>.<Minor>.<Patch>
+```
 
-## Schritt 6: App dem AppStore hinzufügen
+Beispiel: `v1.0.0`, `v0.2.1`
 
-Sobald das Repository fertig entwickelt und auf GitHub gepusht ist, kann die App im AppStore registriert werden.
+Tags in anderen Formaten funktionieren zwar technisch, sortieren aber nur lexikographisch und können im Wizard zur falschen "neueste Version"-Anzeige führen.
 
-> **Wichtig bei privaten Repositories:** Den Collaborator **`six7clickndeploy`** zum Repository hinzufügen, damit der AppStore Zugriff hat:
-> **Settings → Collaborators → Add people → `six7clickndeploy`**
->
-> Bei öffentlichen Repositories ist dieser Schritt nicht notwendig.
+Zu jedem Release **muss** eine umfassende Beschreibung erstellt werden (siehe unten).
 
-Dafür wird lediglich die **GitHub-URL des Repositories** benötigt, z.B.:
+### App registrieren
+
+Bei **privaten Repositories** muss zunächst der Collaborator `six7clickndeploy` hinzugefügt werden, damit der AppStore Zugriff hat:
+**Settings → Collaborators → Add people → `six7clickndeploy`**
+
+Bei öffentlichen Repositories ist dieser Schritt nicht notwendig.
+
+Danach die **GitHub-URL des Repositories** im AppStore unter **"App hinzufügen"** eintragen:
 
 ```
 https://github.com/<dein-username>/<repo-name>
 ```
 
-Diese URL im AppStore unter **"App hinzufügen"** eintragen — der AppStore liest daraufhin die Konfiguration (Variablen, Packer-Template, Terraform) automatisch aus dem Repository ein.
+Der AppStore liest daraufhin die Konfiguration (Variablen, Packer-Template, Terraform) automatisch aus dem Repository ein.
 
-ToDo: Beschreibung zu App Entwickler müssen eine umfängliche Beschreibung im AppStore realisieren
-ToDo: Der App Entwickler muss ein Release erstellen für den AppStore
-ToDo: Generell darauf achten wann man muss schreibt und wann es eher ein Feature ist, dass implementiert werden kann.
-ToDo: (Nicht für die Anleitung sondern für mich) Versionen in GitHub aufräumen
-ToDO: Ordnerstruktur für single image und multi image App
+### Pflichtangaben in der App-Beschreibung
+
+Bei der Registrierung und bei jedem neuen Release **muss** eine umfassende Beschreibung der App hinterlegt werden. Diese muss mindestens folgende Punkte abdecken:
+
+- **User-Management:** Ist ein User-Management vorhanden? Wie ist es geregelt? (z.B. ein Account pro User, gemeinsame Zugangsdaten pro Team)
+- **VM-Deployment:** Wie viele VMs werden deployed? (z.B. eine VM pro Team, eine VM pro User, eine gemeinsame VM)
+- **Konfigurierbare Variablen:** Welche Variablen kann der Deployer konfigurieren und wie werden diese befüllt? (z.B. Flavor-Auswahl, Netzwerk, Datei-Upload)
+- **Änderungen im Release:** Was wurde in dieser Version geändert oder hinzugefügt?
