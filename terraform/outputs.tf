@@ -1,20 +1,18 @@
 ############################
-# [CONTRACT] User Accounts Output
+# User Accounts Output
 ############################
 
-# CONTRACT-SCHEMA:
-# local.user_accounts = {
-#   "<team>-<username>": {
-#     type     = "password"
-#     ip       = "1.2.3.4"
-#     port     = 80
-#     username = "alice@example.com"
-#     auth     = "<passwort>"
-#   }
+# Schema user_accounts:
+# "<team>-<username>": {
+#   type     = "password"   # password | ssh_key | oauth | none
+#   ip       = "1.2.3.4"
+#   port     = 80
+#   username = "alice@example.com"
+#   auth     = "<passwort>"
 # }
 
 output "user_accounts" {
-  description = "[CONTRACT] User accounts mit Zugangsdaten fuer jeden User"
+  description = "User accounts mit Zugangsdaten fuer jeden User"
   value       = local.user_accounts
   sensitive   = true
 }

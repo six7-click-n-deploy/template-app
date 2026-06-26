@@ -1,9 +1,9 @@
 ############################
-# CONTRACT-Variablen (vom Deployer im AppStore gesetzt)
+# Plattform-injizierte Variablen (nicht im Wizard sichtbar)
 ############################
 
 variable "users" {
-  description = "[CONTRACT] Teams mit User-Emails"
+  description = "Per-team roster — vom Worker injiziert. @platform:internal"
   type = map(list(object({
     email = string
   })))
@@ -11,7 +11,7 @@ variable "users" {
 }
 
 variable "assignment_files" {
-  description = "[CONTRACT] Hochgeladene Begleitmaterialien @openstack:file:all"
+  description = "Hochgeladene Begleitmaterialien @openstack:file:all:pdf|docx"
   type = map(object({
     name         = string
     content_b64  = string
@@ -22,29 +22,29 @@ variable "assignment_files" {
 }
 
 ############################
-# BACKEND-Variablen (vom AppStore/Platform-Team gesetzt)
+# Wizard-Variablen (vom Deployer im AppStore konfiguriert)
 ############################
 
 variable "image_name" {
-  description = "[BACKEND] Name des Packer-Images @openstack:image:name"
+  description = "Glance-Image-Name — vom Worker zur Apply-Zeit gesetzt. @platform:internal"
   type        = string
   default     = "my-app-vX"
 }
 
 variable "network_uuid" {
-  description = "[BACKEND] UUID des internen Netzwerks @openstack:network:id"
+  description = "UUID des internen Netzwerks @openstack:network:id"
   type        = string
   default     = "34a00b87-57ce-42c4-8e1b-9ea8a657ec2e"
 }
 
 variable "floating_ip_pool" {
-  description = "[BACKEND] Name des External Networks fuer Floating IPs @openstack:floating_ip_pool:name"
+  description = "Name des External Networks fuer Floating IPs @openstack:floating_ip_pool:name"
   type        = string
   default     = "DHBW"
 }
 
 variable "shared_secgroup_id" {
-  description = "[BACKEND] ID der gemeinsamen Security Group @openstack:security_group:id"
+  description = "ID der gemeinsamen Security Group @openstack:security_group:id"
   type        = string
   default     = "4ffaf007-df66-4250-9118-1bd99378d34a"
 }

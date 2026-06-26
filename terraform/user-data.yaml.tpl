@@ -28,7 +28,7 @@ write_files:
 %{ for user in team_users ~}
   - path: '/etc/myapp/users/${replace(replace(user.email, "@", "_at_"), ".", "-")}.env'
     permissions: '0640'
-    owner: 'root:root'
+    owner: 'root:myapp'
     content: |
       EMAIL=${user.email}
       USERNAME=${user.username}
