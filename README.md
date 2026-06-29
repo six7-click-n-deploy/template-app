@@ -818,6 +818,12 @@ Diese Workflows laufen automatisch bei jedem Push. Schlägt einer der Checks feh
 
 ## 10. App dem AppStore hinzufügen
 
+## Push auf GitHub
+
+Bevor die App auf GitHub gepusht wird sollte eine Markdown-Datei erstellt oder die Markdown-Datei des Templates bearbeitet werden. Diese Datei sollte die App beschreiben und alle wichtigen Details für App-Entwickler umfassen.
+
+Danach kann der Code auf GitHub gepusht werden.
+
 ### Release / Git-Tag erstellen
 
 Die Plattform deployt ausschließlich versionierte Git-Tags — keinen Branch. Vor dem Hinzufügen der App im AppStore **muss** ein Release mit einem Git-Tag im folgenden Format erstellt werden:
