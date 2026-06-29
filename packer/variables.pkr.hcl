@@ -4,7 +4,7 @@
 
 variable "image_name" {
   type        = string
-  description = "@openstack:image:name"
+  description = "Glance-Image-Name — vom Worker zur Build-Zeit gesetzt. @platform:internal"
   default     = "my-app-vX"
 }
 
