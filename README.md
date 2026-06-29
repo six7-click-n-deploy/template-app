@@ -115,7 +115,7 @@ Ein eigenes Git-Repository kann ebenfalls genutzt werden. Die Mindestanforderung
 
 ---
 
-## 4. Minimale App (ohne Packer, ohne User-Management)
+## 4. Minimale App (ohne Packer, ohne funktionierendes User-Management)
 
 Die kleinste funktionierende App besteht aus drei Dateien im `terraform/`-Verzeichnis:
 
@@ -349,9 +349,6 @@ apt-get install -y nginx
 systemctl enable nginx
 ```
 
-**Wichtige Regeln:**
-- Keine Secrets hardcoden
-- Idempotent schreiben (mehrfaches Ausführen darf nichts kaputt machen)
 
 ---
 
@@ -514,11 +511,13 @@ variable "team_secgroups" {
 
 Mit `:team` oder `:user` als letztem Slot rendert der Wizard einen Picker **pro Team bzw. pro User** und übergibt das Ergebnis als Map an Terraform.
 
-**Pflicht:** Wenn `var_scope` `team` oder `user` ist, **muss** der HCL-Typ ein `map(...)` sein — sonst schlägt die Approval mit `MARKER_SCOPED_REQUIRES_MAP` fehl.
+`:all` ist der Default-Scope und muss nicht explizit angegeben werden. Der Wizard rendert dann genau **ein** Eingabefeld für alle Teams gemeinsam — der Wert wird direkt (kein Map-Wrapper) an Terraform übergeben. Beispiel: ein Netzwerk-Picker der für alle Teams gilt.
+
+**Pflicht:** Wenn `var_scope` `:team` oder `:user` ist, **muss** der HCL-Typ ein `map(...)` sein — sonst schlägt die Approval mit `MARKER_SCOPED_REQUIRES_MAP` fehl. Bei `:all` gilt diese Einschränkung nicht.
 
 Kurzform für reinen `var_scope` ohne OpenStack-Typ: `@openstack::team` (Scope im Mode-Slot) ist äquivalent zu `@openstack:::team`.
 
-In Packer-Variablen ist `var_scope=team` oder `=user` **verboten** — ein Packer-Build erzeugt ein einzelnes Image, das von allen Teams gemeinsam genutzt wird.
+In Packer-Variablen ist `var_scope=:team` oder `:user` **verboten** — ein Packer-Build erzeugt ein einzelnes Image, das von allen Teams gemeinsam genutzt wird.
 
 #### `@platform:internal` — Variablen aus dem Wizard ausblenden
 
