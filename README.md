@@ -443,6 +443,39 @@ resource "openstack_compute_instance_v2" "team_vm" {
 
 Ohne diesen Tag wird die VM im Panel unter "Shared" angezeigt.
 
+#### `team_vms`-Output: Pflichtfelder für das Infrastruktur-Panel
+
+Der `team_vms`-Output befüllt das Infrastruktur-Panel im AppStore. Damit der AppStore den Nutzern den korrekten Zugangslink bzw. SSH-Befehl anzeigt, **müssen** folgende Feldnamen exakt eingehalten werden:
+
+| App-Typ | Pflichtfeld | Beispielwert |
+|---|---|---|
+| Webanwendung | `url` | `"http://141.72.13.1:8080"` |
+| SSH-Zugang | `ssh_command` | `"ssh alice@141.72.13.1"` |
+
+Andere Feldnamen werden im Panel zwar angezeigt, aber **nicht** als klickbarer Link bzw. kopierbarer SSH-Befehl hervorgehoben.
+
+```hcl
+# Beispiel Webanwendung
+output "team_vms" {
+  value = {
+    for team in local.teams_list : team => {
+      url         = "http://${openstack_networking_floatingip_v2.team_fip[team].address}:8080"
+      floating_ip = openstack_networking_floatingip_v2.team_fip[team].address
+    }
+  }
+}
+
+# Beispiel SSH-Anwendung
+output "team_vms" {
+  value = {
+    for team in local.teams_list : team => {
+      ssh_command = "ssh ubuntu@${openstack_networking_floatingip_v2.team_fip[team].address}"
+      floating_ip = openstack_networking_floatingip_v2.team_fip[team].address
+    }
+  }
+}
+```
+
 ---
 
 ### 6.3 `@openstack`-Marker für Variablen
@@ -784,6 +817,12 @@ Diese Workflows laufen automatisch bei jedem Push. Schlägt einer der Checks feh
 ---
 
 ## 10. App dem AppStore hinzufügen
+
+## Push auf GitHub
+
+Bevor die App auf GitHub gepusht wird sollte eine Markdown-Datei erstellt oder die Markdown-Datei des Templates bearbeitet werden. Diese Datei sollte die App beschreiben und alle wichtigen Details für App-Entwickler umfassen.
+
+Danach kann der Code auf GitHub gepusht werden.
 
 ### Release / Git-Tag erstellen
 
