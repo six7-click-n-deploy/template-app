@@ -27,13 +27,13 @@ locals {
   enable_floating_ip = true
 }
 
-# Packer-Image aus Glance laden
+# Load Packer image from Glance
 data "openstack_images_image_v2" "image" {
   name        = var.image_name
   most_recent = true
 }
 
-# External Network fuer Floating IPs
+# External network for floating IPs
 data "openstack_networking_network_v2" "external" {
   name = var.floating_ip_pool
 }
@@ -58,7 +58,6 @@ locals {
   teams_list = distinct([for user in local.all_users : user.team])
 }
 
-# Ein Passwort pro individuellem User
 resource "random_password" "user_passwords" {
   for_each         = local.users_map
   length           = 16
@@ -74,14 +73,13 @@ resource "random_password" "user_passwords" {
 # TEAM-BASED VMs
 ############################
 
-# Pro Team ein Port (mit shared Security Group)
+# One port per team (shared security group)
 resource "openstack_networking_port_v2" "team_port" {
   for_each           = toset(local.teams_list)
   network_id         = var.network_uuid
   security_group_ids = [var.shared_secgroup_id]
 }
 
-# Pro Team eine VM
 resource "openstack_compute_instance_v2" "team_vm" {
   for_each = toset(local.teams_list)
 
@@ -99,7 +97,7 @@ resource "openstack_compute_instance_v2" "team_vm" {
     port = openstack_networking_port_v2.team_port[each.key].id
   }
 
-  # TODO: user-data.yaml.tpl mit App-spezifischen Variablen befuellen
+  # TODO: populate user-data.yaml.tpl with app-specific variables
   user_data = templatefile("${path.module}/user-data.yaml.tpl", {
     team_users = [
       for uid, user in local.users_map : {
@@ -147,7 +145,7 @@ locals {
     for uid, user in local.users_map : uid => {
       type     = "password"
       ip       = local.enable_floating_ip ? openstack_networking_floatingip_v2.team_fip[user.team].address : openstack_networking_port_v2.team_port[user.team].all_fixed_ips[0]
-      port     = 80 # TODO: App-spezifischen Port anpassen
+      port     = 80 # TODO: adjust to app-specific port
       username = user.email
       auth     = random_password.user_passwords[uid].result
     }

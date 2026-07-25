@@ -3,25 +3,25 @@ set -euo pipefail
 
 # -----------------------------------------------------------------------------
 # TEMPLATE Provisioning Script
-# Ziel: Hier kommt *deine* App/Runtime rein.
+# Purpose: Add your app/runtime here.
 #
-# Regeln:
-# - idempotent schreiben (mehrfaches Ausführen darf nicht kaputt machen)
-# - keine Secrets hardcoden (nutze CI, Vault, cloud-init, env vars, etc.)
-# - am Ende: Service läuft / Artefakte liegen / Ports passen zur SG
+# Rules:
+# - Write idempotent steps (running multiple times must not break anything)
+# - Do not hardcode secrets (use CI, Vault, cloud-init, env vars, etc.)
+# - End state: service running / artifacts in place / ports match security group
 # -----------------------------------------------------------------------------
 
 echo "Waiting for cloud-init (if present)..."
 cloud-init status --wait || true
 
 # Baseline (optional):
-# - Updates / Base-Pakete
+# - Updates / base packages
 # - Logs/Debug
 echo "Updating package lists..."
 sudo apt-get update
 
 # -----------------------------------------------------------------------------
-# [1] Runtime installieren: minimaler Webserver (nginx)
+# [1] Install runtime: minimal web server (nginx)
 # -----------------------------------------------------------------------------
 echo "Installing nginx (if not already installed)..."
 sudo DEBIAN_FRONTEND=noninteractive apt-get install -y nginx
@@ -31,7 +31,7 @@ sudo systemctl enable nginx
 sudo systemctl restart nginx
 
 # -----------------------------------------------------------------------------
-# [2] App-Artefakt: einfache HTML-Seite
+# [2] App artifact: simple HTML page
 # -----------------------------------------------------------------------------
 echo "Deploying simple index.html..."
 sudo mkdir -p /var/www/html
@@ -49,18 +49,18 @@ sudo tee /var/www/html/index.html >/dev/null << 'EOF'
 EOF
 
 # -----------------------------------------------------------------------------
-# [3] (Optional) eigener systemd-Service
-# - hier nicht nötig, nginx reicht als Webserver
+# [3] (Optional) custom systemd service
+# - not needed here; nginx is sufficient as the web server
 # -----------------------------------------------------------------------------
-# Beispiel bleibt auskommentiert
+# Example left commented out
 
 # -----------------------------------------------------------------------------
-# [4] Optional: Reverse Proxy / TLS / Firewall
-# - für das Minimal-Beispiel nicht nötig
+# [4] Optional: Reverse proxy / TLS / firewall
+# - not needed for this minimal example
 # -----------------------------------------------------------------------------
 
 # -----------------------------------------------------------------------------
-# [5] Cleanup (optional, wenn du kleinere Images willst)
+# [5] Cleanup (optional, reduces image size)
 # -----------------------------------------------------------------------------
 # sudo apt-get clean
 # sudo rm -rf /var/lib/apt/lists/*

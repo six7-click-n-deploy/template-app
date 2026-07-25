@@ -1,10 +1,10 @@
 ############################
-# PLATFORM-Variablen (vom AppStore gesetzt)
+# PLATFORM Variables (set by AppStore)
 ############################
 
 variable "image_name" {
   type        = string
-  description = "Glance-Image-Name — vom Worker zur Build-Zeit gesetzt. @platform:internal"
+  description = "Glance image name — set by the worker at build time. @platform:internal"
   default     = "my-app-vX"
 }
 
